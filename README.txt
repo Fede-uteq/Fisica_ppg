@@ -17,4 +17,4 @@ Las herramientas que se utilizarán para el desarrollo del proyecto son:
 *Microsoft Word
 *Git
 *GitHub
-*ChatGPT
+*Gemini

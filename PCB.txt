@@ -1,0 +1,7 @@
+/// Diseño de pcb   ///
+
+El diseño de la pcb se esta llevando a cabo en la plataforma de Easyeda
+la pcb sera realizada en una placa fenolica de una sola capa por el metodo de planchado.
+
+Link de la placa:
+https://pro.easyeda.com/editor#id=2406cf4930144f6e96370abce6660d3b
