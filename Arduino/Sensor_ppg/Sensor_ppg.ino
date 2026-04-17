@@ -2,100 +2,91 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-// Configuración de la Pantalla OLED 0.91"
+// Configuración OLED
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
 #define OLED_RESET    -1 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// Pines y Variables del Sensor
-const int ppgPin = 0;       // Pin ADC (GPIO 0 / ADC1_CH0)
+// Pines
+const int ppgPin = 0;       // Entrada sensor (ADC)
+const int ledPin = 7;       // LED indicador de pulso
+
+// Variables de control
 int sensorValue = 0;
-int threshold = 2800;       // Valor inicial. Ajustar según lo que veas en el serial.
+const int threshold = 2800; // Umbral fijo (ajusta según tu señal)
 bool pulseDetected = false;
 
-// Variables de Tiempo y BPM
+// Variables de BPM
 unsigned long lastBeatTime = 0;
-float bpm = 0;
-const int samples = 5;      // Para suavizar el cálculo del BPM
-int bpmList[samples];
-int bpmIndex = 0;
+int bpm = 0;
 
 void setup() {
-  // Inicialización del Serial con retardo para estabilización
+  // 1. Iniciar Serial para LabVIEW
   Serial.begin(115200);
-  delay(2000); 
 
-  // Inicialización I2C con los pines que te funcionaron
+  // 2. Configurar LED
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+
+  // 3. Iniciar I2C y Pantalla (Pines 5 y 6)
   Wire.begin(5, 6);
-
-  // Iniciar Pantalla en 0x3C
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
-    Serial.println(F("SSD1306 no encontrado"));
-    for(;;);
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    // Si falla, el Serial nos avisará
+    Serial.println("OLED_Error"); 
+  } else {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(20, 10);
+    display.print("PPG MONITOR");
+    display.display();
   }
-
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(20, 10);
-  display.println("SISTEMA PPG LISTO");
-  display.display();
-  delay(1500);
+  
+  delay(1000);
 }
 
 void loop() {
   sensorValue = analogRead(ppgPin);
 
-  // --- 1. Mandar informacion a labview ---
+  // --- ENVÍO A LABVIEW (Formato: Señal,BPM) ---
   Serial.print(sensorValue);
-  Serial.print(","); 
+  Serial.print(",");
   Serial.println(bpm);
 
-  // --- 2. Detección de Pulso (Lógica de Umbral con Histéresis) ---
+  // --- LÓGICA DE DETECCIÓN DE PULSO ---
   if (sensorValue > threshold && !pulseDetected) {
     unsigned long currentTime = millis();
     unsigned long duration = currentTime - lastBeatTime;
 
-    // Filtro de tiempo: mínimo 350ms entre latidos (~170 BPM máximo)
-    if (duration > 350) {
-      int instantBpm = 60000 / duration;
-      
-      // Promedio simple para estabilidad
-      bpmList[bpmIndex] = instantBpm;
-      bpmIndex = (bpmIndex + 1) % samples;
-      
-      float sum = 0;
-      for(int i=0; i<samples; i++) sum += bpmList[i];
-      bpm = sum / samples;
-
+    // Filtro de tiempo para evitar falsos positivos (>300ms = <200 BPM)
+    if (duration > 300) {
+      bpm = 60000 / duration;
       lastBeatTime = currentTime;
       pulseDetected = true;
       
-      // Actualizar pantalla en cada latido detectado
-      updateOLED();
+      // Acciones rápidas en el latido
+      digitalWrite(ledPin, HIGH);
+      updateDisplay(); 
     }
   }
 
-  // Resetear detección cuando la señal baja del umbral (con margen de ruido)
-  if (sensorValue < (threshold - 150)) {
+  // Histéresis simple para resetear el pulso
+  if (sensorValue < (threshold - 100)) {
     pulseDetected = false;
+    digitalWrite(ledPin, LOW);
   }
 
-  delay(10); // Frecuencia de muestreo 100Hz aprox.
+  // Muestreo estable (100Hz)
+  delay(10); 
 }
 
-void updateOLED() {
+void updateDisplay() {
+  // Solo se llama una vez por latido para no saturar el bus I2C
   display.clearDisplay();
-  
-  // Dibujar indicador de latido (un pequeño cuadro)
-  display.fillRect(0, 0, 5, 5, SSD1306_WHITE);
-
-  // Mostrar BPM
   display.setTextSize(2);
-  display.setCursor(15, 8);
+  display.setCursor(20, 8);
   display.print("BPM: ");
-  display.print((int)bpm);
-  
+  display.print(bpm);
   display.display();
 }
